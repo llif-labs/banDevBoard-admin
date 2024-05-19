@@ -45,6 +45,8 @@ const Styles = {
     background-color: #fff;
     border-radius: 1rem;
     padding: 2rem;
+    height: calc(100vh - 20rem);
+    overflow-y: scroll;
   `
 }
 

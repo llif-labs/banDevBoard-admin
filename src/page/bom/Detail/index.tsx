@@ -1,7 +1,8 @@
 import { useParams } from "react-router-dom";
 import AdminAction from "../../../store/action/adminAction";
-import { Wrap, Table, MailWrap } from './Style';
+import { Wrap, Table, MailWrap, MemoInput} from './Style';
 import { useEffect, useState } from "react";
+import SearchInput from "../../../module/searchInput";
 
 const firstKey = ['기구부', '제어부']
 const secondKey = ['토출부', '공급부', '구동부', '기타 요소']
@@ -19,6 +20,12 @@ const Index = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [totalRows, setTotalRows] = useState(0);
   const [email, setEmail] = useState('')
+  const [list, setList] = useState<any>({
+    application: [],
+    discharge: [],
+    supply: [],
+    robot: [],
+  })
 
   let rowIndex = 0;
   let targetRow = 0;
@@ -27,42 +34,92 @@ const Index = () => {
   const [state, setState] = useState<any>({});
   const [price, setPrice] = useState([0,0,0,0,0]);
 
-  const { getDetail } = AdminAction();
+  const { getDetail, getItemList, saveBom } = AdminAction();
+
+  const handleAppendRow = (key: string) => {
+    setState((prevState:any) => {
+      let temp = {...prevState}
+      temp.survey[key].item.push({})
+      return temp
+    })
+  }
+
+  const handleSaveBom = () => {
+    saveBom(state)
+  }
+
+  const handleUpdateState = (key: string, idx: number, partName: string) => {
+    setState((prevState: any) => {
+      let temp = { ...prevState };
+      const item = list[key].filter((it: any) => it.part_name === partName)[0]
+      try {
+        temp.survey[key].item[idx] = item
+      }catch (e){
+        temp.survey[key].item.push(item)
+      }
+      // console.log(temp.survey[key].item[idx])
+      return temp;
+    });
+  }
+
+  const handleUpdateStateCnt = (key: string, idx: number, num: number) => {
+    setState((prevState: any) => {
+      let temp = { ...prevState };
+      temp.survey[key].cnt = temp.survey[key].cnt + num < 0 ? 0 : temp.survey[key].cnt + num;
+      return temp;
+    });
+  }
+
+  const handleUpdateMemo = (e: any, key: string) => {
+    setState((prevState: any) => {
+      let temp = { ...prevState };
+      temp.survey[key].memo = e.target.value
+      return temp;
+    });
+  }
+
+  const returnList = (currentSecondIndex: number) => {
+    switch (currentSecondIndex) {
+      case 0:
+        return list.discharge
+      case 1:
+        return list.supply
+      case 2:
+        return list.application
+      case 3:
+        return list.robot
+      default:
+        return []
+    }
+  }
 
   useEffect(() => {
     seq && getDetail(seq, setState);
+    getItemList(setList)
   }, [seq]);
 
   useEffect(() => {
     if (state?.survey) {
-      const depth1 = {
-        application: state?.survey.application,
-        discharge: state?.survey.discharge,
-        supply: state?.survey.supply,
-      };
 
-
-      const depth2 = {
-        robot: state?.survey.robot,
-      };
+      console.log(state.survey)
 
       setPrice([
-        state?.survey.discharge.reduce((prev: number, next: any) => prev + next.single_amount, 0),
-        state?.survey.supply.reduce((prev: number, next: any) => prev + next.single_amount, 0),
-        state?.survey.application.reduce((prev: number, next: any) => prev + next.single_amount, 0),
-        state?.survey.robot.reduce((prev: number, next: any) => prev + next.single_amount, 0),
+        state?.survey.discharge.item.reduce((prev: number, next: any) => prev + next?.single_amount, 0),
+        state?.survey.supply.item.reduce((prev: number, next: any) => prev + next?.single_amount, 0),
+        state?.survey.application.item.reduce((prev: number, next: any) => prev + next?.single_amount, 0),
+        state?.survey.robot.item.reduce((prev: number, next: any) => prev + next?.single_amount, 0),
       ])
 
       setTableSpan({
         first: [
-          (Number(depth1.application.length) || 1) + 1 + Number(depth1.discharge.length) + 1 + Number(depth1.supply.length) + 1,
+          (Number(state?.survey.application.item.length) || 1) + 1 + Number(state?.survey.discharge.item.length) + 1 + Number(state?.survey.supply.item.length) + 1,
           2,
         ],
         second: [
-          Number(depth1.discharge.length) + 1,
-          Number(depth1.supply.length) + 1,
-          (Number(depth1.application.length) || 1) + 1,
-          2
+          (Number(state?.survey.discharge.item.length) || 1) + 1,
+          (Number(state?.survey.supply.item.length) || 1) + 1,
+          (Number(state?.survey.application.item.length) || 1) + 1,
+          (Number(state?.survey.robot.item.length) || 1) + 1,
         ],
       });
     }
@@ -91,6 +148,7 @@ const Index = () => {
             let secondTd = null;
             let isSecondTdFirstRender = false;
             let isSecondTdLastRender = false;
+            const idx = i - targetRow
 
             let currentFirstIndex = tableSpan.first.findIndex((span, idx) => {
               const sum = tableSpan.first.slice(0, idx + 1).reduce((a, c) => a + c, 0);
@@ -119,7 +177,6 @@ const Index = () => {
               isSecondTdLastRender = true;
             }
 
-
             rowIndex++;
 
             return (
@@ -128,18 +185,36 @@ const Index = () => {
                 {secondTd}
                 {new Array(columns - 2).fill(1).map((_, j) => {
                   if (isSecondTdLastRender) {
-                    if (j === 0) return <td className="bottom" colSpan={columns - 2} key={j}>메모</td>;
+                    if (j === 0) return <td className="bottom" colSpan={columns - 2} key={j}>
+                      <MemoInput
+                        type={'text'}
+                        value={state.survey[third[currentSecondIndex]].memo || ''}
+                        placeholder={'메모를 입력해 주세요'}
+                        onChange={(e:any) => handleUpdateMemo(e, third[currentSecondIndex])}
+                      />
+                    </td>;
                     else return null;
                   } else {
                     switch (j) {
                       case 0:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? thirdKey[currentSecondIndex] : ''}</td>
+                        return <td className="top" key={j}>
+                          {isSecondTdFirstRender ? <button className={'dept3-add-btn'} onClick={() => {handleAppendRow(third[currentSecondIndex])}}>+</button> : null }
+                          {isSecondTdFirstRender ? thirdKey[currentSecondIndex] : ''}
+                        </td>
                       case 1:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? state.survey[third[currentSecondIndex]][i - targetRow]?.category : ''}</td>
+                        return <td className="top" key={j}>
+                          {isSecondTdFirstRender ? state.survey[third[currentSecondIndex]].item[i - targetRow]?.category : ''}
+                        </td>
                       case 2:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? '제품명' : ''}</td>
                       case 3:
-                        return <td className="top" key={j}>{state.survey[third[currentSecondIndex]][i - targetRow]?.part_name}</td>
+                        return <td className="top" key={j}>
+                          <SearchInput
+                            value={state.survey[third[currentSecondIndex]].item[i - targetRow]?.part_name}
+                            setValue={(name: string) => handleUpdateState(third[currentSecondIndex], idx, name)}
+                            list={returnList(currentSecondIndex)}
+                          />
+                        </td>
                       case 4:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? '변경' : ''}</td>
                       case 5:
@@ -147,17 +222,23 @@ const Index = () => {
                       case 7:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? '옵션' : ''}</td>
                       case 8:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? '1' : ''}</td>
+                        return <td className="top" key={j}>{isSecondTdFirstRender ? state.survey[third[currentSecondIndex]].cnt : ''}</td>
                       case 9:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? 'EA' : ''}</td>
                       case 10:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? '+' : ''}</td>
+                        return <td className="top" key={j} >
+                          {isSecondTdFirstRender ? <button onClick={() => handleUpdateStateCnt(third[currentSecondIndex],i - targetRow, 1)}> + </button>
+                            : ''}
+                        </td>
                       case 11:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? '-' : ''}</td>
+                        return <td className="top" key={j} >
+                          {isSecondTdFirstRender ? <button onClick={() => handleUpdateStateCnt(third[currentSecondIndex],i - targetRow, -1)} >-</button> : ''}
+                        </td>
                       case 13:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? '단가' : ''}</td>
                       case 14:
-                        return <td className="top" key={j}>{isSecondTdFirstRender ? price[currentSecondIndex].toLocaleString('KO-KR') : ''}</td>
+                        // return <td className="top" key={j}>{isSecondTdFirstRender ? (price[currentSecondIndex] * state.survey[third[currentSecondIndex]].cnt).toLocaleString('KO-KR') : ''}</td>
+                        return <td className="top" key={j}>{isSecondTdFirstRender ? (price[currentSecondIndex]).toLocaleString('KO-KR') : ''}</td>
                       case 15:
                         return <td className="top" key={j}>{isSecondTdFirstRender ? '원' : ''}</td>
                       case 16:
@@ -242,7 +323,8 @@ const Index = () => {
 
       <MailWrap>
         <input type={'text'} placeholder={'example@email.com'} value={email} onChange={(e: any) => setEmail(e.target.value)}/>
-        <button>메일발송</button>
+        <button >메일발송</button>
+        <button onClick={handleSaveBom}>저장</button>
       </MailWrap>
     </Wrap>
   );

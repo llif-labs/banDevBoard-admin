@@ -22,9 +22,32 @@ const AdminAction = () => {
     )
   }
 
+  const getItemList = async (setState: any) => {
+    await defaultService.handleService({
+      endPoint: '/v1/admin/bom/item/list',
+      method: 'get'
+    }).then(
+      response => setState(response.data.payload),
+      error => console.log(error)
+    )
+  }
+
+  const saveBom = async (state: any) => {
+    await defaultService.handleService({
+      endPoint: '/v1/admin/bom/item/save',
+      method: 'post',
+      params: state
+    }).then(
+      response => console.log(response),
+      error => console.log(error)
+    )
+  }
+
   return {
     getList,
-    getDetail
+    getDetail,
+    getItemList,
+    saveBom
   }
 
 }
